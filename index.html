@@ -1,0 +1,367 @@
+
+<!--
+
+	This is currently a proof on concept. I apologise for the messy and unclear coding style. I'm normally better than this, honest! :P
+
+ -->
+
+<html>
+<head>
+	<style type="text/css">
+	canvas { border: 1px solid black; }
+	</style>
+	<script src="svg.js"></script>
+	<script src="lodash.js"></script>
+	<script src="generate.js"></script>
+	<script src="https://code.jquery.com/jquery-2.1.4.js"></script>
+	<link rel="stylesheet" type="text/css" href="bootstrap.css">
+	<style>
+		body {
+			background-color: gray;
+		}
+
+		#drawing {
+			text-align: center;
+		}
+
+		h1 {
+			text-align: center;
+			font-family: monospace;
+  			color: #4A4A4A;
+  			padding-top: 16px;
+		}
+
+		.controls {
+			text-align: center;
+			padding-top: 20px;
+		}
+
+		@media print {
+		   .controls {
+				visibility: hidden;
+			}
+
+			p {
+				visibility: hidden;
+			}
+		}
+
+		p {
+			text-align: center;
+			background-color: white;
+  			padding: 4px 0;
+		}
+	</style>
+</head>
+<body>
+	<h1>-Hashi-</h1>
+	<p>Hashi puzzle generator - you can't yet play them in browser but press CTRL-P to print so you can solve them on paper :) The algorithm will be improved once my exams are out the way.</p>
+	<div id="drawing"></div>
+	<div class="controls">
+		<select id="sizeSelector" class="form-control" style="display:inline-block;width: 100px;">
+			<option value="5*6">5x6</option>
+			<option value="7*8">7x8</option>
+			<option value="9*11" selected="selected">9x11</option>
+			<option value="11*13">11x13</option>
+			<option value="13*15">13x15</option>
+			<option value="13*18">13x18</option>
+			<option value="21*18">21x18</option>
+			<option value="31*23">31x23</option>
+		</select>
+		<button id="newPuzzle" class="btn btn-default">Generate</button>
+	</div>
+
+	<script>
+	var outerDraw = SVG('drawing').size(1920, 1080);
+	var draw = 	outerDraw.group();
+
+	var offset = { x: 0, y: 0 };
+
+	var width = 9, height = 11, scale = 32;
+
+	var board = GenerateBoard(width,height);
+
+	var grid = draw.group();
+	var lineLevel = draw.group();
+
+	var filled = [];
+
+	var selectedCircle = null;
+	var tempLine = null;
+	var tempLineWidth = 1;
+
+	var deselectCircle = function() {
+		if(selectedCircle !== null) {
+			resetNode(selectedCircle);
+			if(tempLine !== null) {
+				tempLine.remove();
+				tempLine = null;
+			} 
+			selectedCircle = null;
+			for(var i=0; i<filled.length; i++) {
+				filled[i].fill({ color: '#fff' });
+			}
+			filled = [];
+		}
+	};
+
+	var drawTempLine = function(evt) {
+		if(selectedCircle !== null) {
+			if(tempLine !== null) {
+				tempLine.remove();
+			} 
+			if(Math.abs(selectedCircle.bbox().x+12 - (evt.x-8)) > Math.abs(selectedCircle.bbox().y+12 - (evt.y-8))) {
+				tempLine = lineLevel.line(selectedCircle.bbox().x+12,selectedCircle.bbox().y+12,evt.x-8,selectedCircle.bbox().y+12).stroke({ width: tempLineWidth });
+			} else {
+				tempLine = lineLevel.line(selectedCircle.bbox().x+12,selectedCircle.bbox().y+12,selectedCircle.bbox().x+12,evt.y-8).stroke({ width: tempLineWidth });
+			}
+			
+		}
+	}
+
+	SVG.on(window, 'mouseup', deselectCircle);
+	SVG.on(window, 'mousemove', drawTempLine);
+
+	function drawGrid() {
+
+		for(var i = 0; i< width; i++) {
+			grid.line(i * scale + offset.x, offset.y, i*scale + offset.x, (height-1)*scale + offset.y).stroke('#eee');
+		}
+
+		for(var i = 0; i< height; i++) {
+			grid.line(offset.y, i * scale + offset.y, (width-1) * scale + offset.x, i*scale + offset.y).stroke('#eee');
+		}
+
+		grid.translate(16,16);
+	}
+
+	drawGrid();
+	
+	var highlightedNodes = [];
+
+	var rand = function(min, max) {
+		return Math.floor(Math.random() * (max - min)) + min;
+	};
+
+	var numberOfNodes = rand(20,35);
+
+	var getRandomItem = function(list, weight) {
+		var total_weight = weight.reduce(function (prev, cur, i, arr) {
+			return prev + cur;
+		});
+
+		var random_num = rand(0, total_weight);
+		var weight_sum = 0;
+			    //console.log(random_num)
+
+			    for (var i = 0; i < list.length; i++) {
+			    	weight_sum += weight[i];
+			    	weight_sum = +weight_sum.toFixed(2);
+
+			    	if (random_num <= weight_sum) {
+			    		return list[i];
+			    	}
+			    }
+			}
+
+			var selectRandomNode = function(nodes) {
+    	/*var totalArity = _.sum(_.pluck(nodes, "arity"));
+    	var selectedValue = Math.floor((Math.random() * totalArity));
+
+    	var testArity = 0;
+    	for(var i = 0; i < nodes.length; i++) {
+    		testArity += nodes[i].arity;
+    		if(testArity >= selectedValue) return nodes[i];
+    	}*/
+    	return _.sample(nodes);
+    };
+
+    var getCrossSection = function(loc) {
+    	var rowStart = Math.floor(loc/width) * width;
+    	
+    	var output = [];
+
+    	for(var i = loc + 1; i<rowStart + width; i++) {
+    		if(board[i] === 0) {
+    			output.push(i);
+    		} else {
+    			break;
+    		}
+    	}
+    	
+    	for(var i = loc - 1; i>=rowStart; i--) {
+    		if(board[i] === 0) {
+    			output.push(i);
+    		} else {
+    			break;
+    		}
+    	}
+
+    	for(var i = loc + width; i<board.length; i+=width) {
+    		if(board[i] === 0) {
+    			output.push(i);
+    		} else {
+    			break;
+    		}
+    	}
+    	
+    	for(var i = loc - width; i>0; i-=width) {
+    		if(board[i] === 0) {
+    			output.push(i);
+    		} else {
+    			break;
+    		}
+    	}
+
+    	return output;
+    }
+
+    var getCollisions = function(loc) {
+    	var rowStart = Math.floor(loc/width) * width;
+    	
+    	var output = [];
+
+    	for(var i = loc + 1; i<rowStart + width; i++) {
+    		if(board[i] > 0) {
+    			output.push(i);
+    			break;
+    		}
+    	}
+    	
+    	for(var i = loc - 1; i>=rowStart; i--) {
+    		if(board[i] > 0) {
+    			output.push(i);
+    			break;
+    		}
+    	}
+
+    	for(var i = loc + width; i<board.length; i+=width) {
+    		if(board[i] > 0) {
+    			output.push(i);
+    			break;
+    		}
+    	}
+    	
+    	for(var i = loc - width; i>0; i-=width) {
+    		if(board[i] > 0) {
+    			output.push(i);
+    			break;
+    		}
+    	}
+
+    	return output;
+    }
+    
+
+    var frame = draw.group();
+
+    var resetNode = function(node) {
+    	node.first().fill({ color: '#fff' }).attr('stroke-width', 1);
+    }
+
+
+    var highlightCircle = function() {
+    	if(selectedCircle !== this)this.first().fill({ color: '#0FC121' }).attr('stroke-width', 2);
+
+
+    	if(tempLine !== null) {
+	  	//tempLine.attr('stroke-width', 2);
+	  	tempLineWidth = 3;
+	  }
+
+	  var circleNumber = parseInt(this.first().node.id.substr(7));
+
+	  if(selectedCircle === null) {
+	  	var collisions = getCollisions(circleNumber);
+
+	  	for(var i=0; i<collisions.length; i++) {
+	  		SVG.get("circle_" + collisions[i]).fill({ color: '#92CE98' });
+	  		filled.push(SVG.get("circle_" + collisions[i]));
+	  	}
+	  }
+	};
+
+	var unHighlightCircle = function() {
+		if(selectedCircle === null) {
+			resetNode(this);
+			for(var i=0; i<filled.length; i++) {
+				filled[i].fill({ color: '#fff' });
+			}
+			filled = [];
+		}
+		if(tempLine !== null) {
+	  	//tempLine.attr('stroke-width', 1);
+	  	tempLineWidth = 1;
+	  }
+	};
+
+	var nodeClick = function() {
+		selectedCircle = this;
+		this.first().fill({ color: 'aquamarine' }).attr('stroke-width', 3);
+	}
+
+	function redrawBoard() {
+
+		frame.clear();
+
+		for(var i=0; i<board.length; i++) {		
+
+
+			if(board[i] === 0) {
+				continue;
+			} 
+
+			if(board[i] < 0) {
+				//circle = circle.fill('Green');
+				continue;				
+			}	
+
+			var cGroup = frame.group();
+
+			var circle = cGroup.circle(24);
+
+			if(board[i] > 0) {
+				circle = circle.fill('white').stroke('black');				
+			}					
+
+			circle.translate(offset.x + (i % width) * 32 + 4, offset.y + Math.floor(i/width)*32 + 4).id(`circle_${i}`);			
+
+			if(board[i] > 0) {
+				var txt = cGroup.text(board[i].toString()).font({
+					family:   'Helvetica',
+					size:     12,
+					anchor:   'middle'
+				}).fill('#333');
+				txt.translate(offset.x + (i % width) * 32 + 16, offset.y + Math.floor(i/width)*32 + 4);
+				txt.style('cursor:pointer;user-select: none;')
+			}
+
+			cGroup.on('mousedown', nodeClick);
+			cGroup.on('mouseover', highlightCircle);
+			cGroup.on('mouseout', unHighlightCircle);
+
+			outerDraw.size(draw.bbox().width+draw.bbox().x, draw.bbox().height+draw.bbox().y);
+		}		
+	}
+
+	
+
+	redrawBoard();
+
+	$("#newPuzzle").click(function() {
+
+		var sizing = $("#sizeSelector")[0].value;
+		var xy = sizing.split('*');
+		width = parseInt(xy[0]);
+		height = parseInt(xy[1]);
+
+		grid.clear();
+		drawGrid();
+
+		board = GenerateBoard(width,height);
+		redrawBoard();
+	});
+
+	</script>
+</body>
+</html>
